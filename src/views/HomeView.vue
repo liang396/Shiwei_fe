@@ -1,18 +1,23 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 import {
   addCartItem,
-  clearAuthSession,
   fetchProductPage,
   fetchPromotionSpecialProducts,
-  readAuthSession,
 } from '../api'
 import { catalogProducts, categoryTree, getFeaturedProducts } from '../catalog'
+import HomeTopBar from '../components/home/HomeTopBar.vue'
+import HomeCategoryTabs from '../components/home/HomeCategoryTabs.vue'
+import HomeHero from '../components/home/HomeHero.vue'
+import HomeProductGrid from '../components/home/HomeProductGrid.vue'
+import HomeBottomNav from '../components/home/HomeBottomNav.vue'
 
 const router = useRouter()
-const currentUser = readAuthSession()
+const authStore = useAuthStore()
+const currentUser = computed(() => authStore.user)
 const activeNav = ref('首页')
 const actionMessage = ref('')
 const activeMainCategory = ref(categoryTree[0].name)
@@ -28,7 +33,6 @@ const productPageCursor = ref(null)
 const productHasMore = ref(true)
 const loadingMoreProducts = ref(false)
 const PRODUCT_PAGE_SIZE = 6
-
 const CAROUSEL_DELAY = 5000
 
 const navItems = [
@@ -39,11 +43,10 @@ const navItems = [
 ]
 
 const displayName = computed(() => {
-  if (!currentUser) {
+  if (!currentUser.value) {
     return '拾味用户'
   }
-
-  return currentUser.nickname || currentUser.username || '拾味用户'
+  return currentUser.value.nickname || currentUser.value.username || '拾味用户'
 })
 
 const currentCategory = computed(() => {
@@ -51,7 +54,6 @@ const currentCategory = computed(() => {
 })
 
 const activeSubcategories = computed(() => ['全部', ...currentCategory.value.subcategories])
-
 const productSource = computed(() => (remoteProducts.value.length ? remoteProducts.value : catalogProducts))
 
 const selectedProducts = computed(() => {
@@ -76,7 +78,6 @@ const sortLabel = computed(() => {
     asc: '升序',
     desc: '降序',
   }
-
   return `${labelMap[sortKey.value]} ${directionMap[sortDirection.value]}`
 })
 
@@ -153,10 +154,6 @@ function clearCarouselInterval() {
   }
 }
 
-function setSlide(index) {
-  activeSlideIndex.value = index
-}
-
 function nextSlide() {
   activeSlideIndex.value = (activeSlideIndex.value + 1) % heroProducts.value.length
 }
@@ -166,10 +163,7 @@ function startCarousel() {
   if (heroProducts.value.length <= 1) {
     return
   }
-
-  carouselInterval.value = window.setInterval(() => {
-    nextSlide()
-  }, CAROUSEL_DELAY)
+  carouselInterval.value = window.setInterval(nextSlide, CAROUSEL_DELAY)
 }
 
 function resetCarousel() {
@@ -183,8 +177,7 @@ function handleMainCategoryClick(categoryName) {
   resetCarousel()
 }
 
-function handleSubcategorySelect(mainCategory, subcategory) {
-  activeMainCategory.value = mainCategory
+function handleSubcategorySelect(subcategory) {
   activeSubcategory.value = subcategory
   resetCarousel()
 }
@@ -201,11 +194,6 @@ function handleSortChange(nextSortKey) {
     sortDirection.value = 'desc'
   }
   sortMenuOpen.value = false
-}
-
-function handleDotClick(index) {
-  setSlide(index)
-  startCarousel()
 }
 
 function openCategoryPage() {
@@ -289,7 +277,7 @@ async function loadMoreProducts() {
 }
 
 function handleLogout() {
-  clearAuthSession()
+  authStore.clearUser()
   router.push('/login')
 }
 
@@ -299,7 +287,7 @@ watch(heroProducts, () => {
 })
 
 onMounted(async () => {
-  if (!currentUser) {
+  if (!currentUser.value) {
     router.replace('/login')
     return
   }
@@ -316,216 +304,56 @@ onBeforeUnmount(() => {
 <template>
   <main class="home-shell">
     <section class="home-frame">
-      <header class="home-topbar">
-        <div class="home-brand">
-          <span class="home-brand__logo">拾</span>
-          <div>
-            <p class="home-brand__eyebrow">Fresh Market</p>
-            <h1>拾味商城</h1>
-          </div>
-        </div>
+      <HomeTopBar
+        :nav-items="navItems"
+        :active-nav="activeNav"
+        :active-main-category="activeMainCategory"
+        @nav-click="handleNavClick"
+        @logout="handleLogout"
+      />
 
-        <nav class="home-desktop-nav" aria-label="顶部导航">
-          <button
-            v-for="item in navItems"
-            :key="item.label"
-            class="desktop-nav__item"
-            :class="{ 'is-active': activeNav === item.label }"
-            type="button"
-            @click="handleNavClick(item)"
-          >
-            {{ item.label }}
-          </button>
-        </nav>
-      </header>
+      <HomeCategoryTabs
+        :category-tree="categoryTree"
+        :active-main-category="activeMainCategory"
+        :active-subcategory="activeSubcategory"
+        :active-subcategories="activeSubcategories"
+        :sort-menu-open="sortMenuOpen"
+        :sort-key="sortKey"
+        :sort-label="sortLabel"
+        @main-change="handleMainCategoryClick"
+        @subcategory-change="handleSubcategorySelect"
+        @toggle-sort="toggleSortMenu"
+        @sort-change="handleSortChange"
+      />
 
-      <section class="search-row">
-        <label class="search-box">
-          <span class="search-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8" />
-              <path d="m20 20-3.5-3.5" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" />
-            </svg>
-          </span>
-          <input :placeholder="`搜索${activeMainCategory}`" type="text" />
-        </label>
+      <HomeHero
+        :active-hero-product="activeHeroProduct"
+        :hero-products="heroProducts"
+        :active-slide-index="activeSlideIndex"
+        :display-name="displayName"
+        :render-price="renderPrice"
+        @open-product="openProductDetail"
+        @open-category="openCategoryPage"
+        @dot-click="activeSlideIndex = $event"
+      />
 
-        <button class="notice-button" type="button" @click="handleLogout" aria-label="退出登录">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M14 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
-            <path d="M10 12h10" stroke="currentColor" stroke-linecap="round" stroke-width="1.7" />
-            <path d="m17 8 4 4-4 4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
-          </svg>
-        </button>
-      </section>
-
-      <nav class="category-tabs category-tabs--macro" aria-label="首页大类导航">
-        <div class="category-tabs__main">
-          <div v-for="category in categoryTree" :key="category.id" class="category-tab-wrap">
-            <button
-              class="category-tab"
-              :class="{ 'is-active': activeMainCategory === category.name }"
-              type="button"
-              @click="handleMainCategoryClick(category.name)"
-            >
-              {{ category.name }}
-            </button>
-          </div>
-        </div>
-
-        <div class="category-sort">
-          <button class="category-sort__trigger" type="button" @click="toggleSortMenu">
-            <span class="category-sort__value">{{ sortLabel }}</span>
-            <span class="category-sort__caret">▾</span>
-          </button>
-
-          <div v-if="sortMenuOpen" class="category-sort__menu">
-            <button class="category-sort__option" :class="{ 'is-active': sortKey === 'price' }" type="button" @click="handleSortChange('price')">价格</button>
-            <button class="category-sort__option" :class="{ 'is-active': sortKey === 'sales' }" type="button" @click="handleSortChange('sales')">销量</button>
-            <button class="category-sort__option" :class="{ 'is-active': sortKey === 'popularity' }" type="button" @click="handleSortChange('popularity')">热度</button>
-          </div>
-        </div>
-      </nav>
-
-      <section class="home-subcategory-inline">
-        <span class="home-subcategory-inline__label">{{ activeMainCategory }}</span>
-        <div class="home-subcategory-inline__list">
-          <button
-            v-for="sub in activeSubcategories"
-            :key="sub"
-            class="home-subcategory-inline__chip"
-            :class="{ 'is-active': activeSubcategory === sub }"
-            type="button"
-            @click="handleSubcategorySelect(activeMainCategory, sub)"
-          >
-            {{ sub }}
-          </button>
-        </div>
-      </section>
-
-      <section v-if="activeHeroProduct" class="hero-card" :class="`hero-card--${activeHeroProduct.theme}`">
-        <div class="hero-copy">
-          <span class="hero-badge">{{ displayName }}，热门推荐</span>
-          <h2>{{ activeHeroProduct.name }}</h2>
-          <p>{{ activeHeroProduct.desc }}</p>
-
-          <div class="hero-tags">
-            <span class="hero-tag hero-tag--price">¥{{ renderPrice(activeHeroProduct.price) }}{{ activeHeroProduct.unit }}</span>
-            <span v-for="badge in activeHeroProduct.badges" :key="badge" class="hero-tag">{{ badge }}</span>
-          </div>
-
-          <div class="hero-actions">
-            <button class="hero-action hero-action--primary" type="button" @click="openProductDetail(activeHeroProduct.id)">查看商品</button>
-            <button class="hero-action hero-action--secondary" type="button" @click="openCategoryPage">进入活动</button>
-          </div>
-        </div>
-
-        <div class="hero-visual" aria-hidden="true">
-          <div class="hero-product-stage" :class="`hero-product-stage--${activeHeroProduct.theme}`">
-            <span class="hero-product-shape hero-product-shape--main"></span>
-            <span class="hero-product-shape hero-product-shape--accent"></span>
-            <span class="hero-product-shape hero-product-shape--detail"></span>
-          </div>
-        </div>
-      </section>
-
-      <div v-if="heroProducts.length > 1" class="hero-dots" aria-label="热门商品轮播切换">
-        <button
-          v-for="(product, index) in heroProducts"
-          :key="product.id"
-          class="hero-dot"
-          :class="{ 'is-active': activeSlideIndex === index }"
-          type="button"
-          :aria-label="`切换到热门商品 ${index + 1}`"
-          @click="handleDotClick(index)"
-        ></button>
-      </div>
-
-      <section class="section-heading">
-        <div>
-          <p class="section-heading__eyebrow">Hot Picks</p>
-          <h3>{{ activeMainCategory }}</h3>
-        </div>
-        <button class="section-heading__action" type="button" @click="openCategoryPage">查看全部</button>
-      </section>
-
-      <section class="product-grid">
-        <article
-          v-for="product in featuredProducts"
-          :key="product.id"
-          class="product-card product-card--interactive"
-          @click="openProductDetail(product.id)"
-        >
-          <div class="product-visual" :class="`theme-${product.theme}`">
-            <div class="plate">
-              <div class="plate-item"></div>
-              <div class="plate-item"></div>
-              <div class="plate-item"></div>
-            </div>
-          </div>
-
-          <div class="product-content">
-            <div class="product-content__topline">
-              <span class="product-subcategory">{{ product.subcategory }}</span>
-            </div>
-            <h4>{{ product.name }}</h4>
-            <p>{{ product.desc }}</p>
-
-            <div class="product-meta">
-              <div class="product-price">
-                <span class="price-symbol">¥</span>
-                <strong>{{ renderPrice(product.price) }}</strong>
-                <span class="price-unit">{{ product.unit }}</span>
-              </div>
-
-              <button class="product-action" type="button" :aria-label="`加入购物车：${product.name}`" @click.stop="handleAddCart(product)">+</button>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <div v-if="productHasMore" class="section-heading section-heading--load-more">
-        <button class="section-heading__action" type="button" :disabled="loadingMoreProducts" @click="loadMoreProducts">
-          {{ loadingMoreProducts ? '加载中...' : '加载更多商品' }}
-        </button>
-      </div>
+      <HomeProductGrid
+        :active-main-category="activeMainCategory"
+        :featured-products="featuredProducts"
+        :render-price="renderPrice"
+        :product-has-more="productHasMore"
+        :loading-more-products="loadingMoreProducts"
+        @open-category="openCategoryPage"
+        @open-product="openProductDetail"
+        @add-cart="handleAddCart"
+        @load-more="loadMoreProducts"
+      />
 
       <section v-if="actionMessage" class="status-tip status-tip--success home-action-tip">
         {{ actionMessage }}
       </section>
 
-      <nav class="bottom-nav" aria-label="底部导航">
-        <button
-          v-for="item in navItems"
-          :key="item.label"
-          class="bottom-nav__item"
-          :class="{ 'is-active': activeNav === item.label }"
-          type="button"
-          @click="handleNavClick(item)"
-        >
-          <span class="bottom-nav__icon">
-            <svg v-if="item.icon === 'home'" viewBox="0 0 24 24" fill="none">
-              <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8" />
-            </svg>
-            <svg v-else-if="item.icon === 'grid'" viewBox="0 0 24 24" fill="none">
-              <rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" />
-              <rect x="14" y="4" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" />
-              <rect x="4" y="14" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" />
-              <rect x="14" y="14" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" />
-            </svg>
-            <svg v-else-if="item.icon === 'cart'" viewBox="0 0 24 24" fill="none">
-              <path d="M5 6h2l1.2 7.2a1 1 0 0 0 1 .8h7.8a1 1 0 0 0 1-.78L19 8H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-              <circle cx="10" cy="18.5" r="1.5" fill="currentColor" />
-              <circle cx="17" cy="18.5" r="1.5" fill="currentColor" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
-              <path d="M5 20a7 7 0 0 1 14 0" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" />
-            </svg>
-          </span>
-          <span>{{ item.bottomLabel || item.label }}</span>
-        </button>
-      </nav>
+      <HomeBottomNav :nav-items="navItems" :active-nav="activeNav" @nav-click="handleNavClick" />
     </section>
   </main>
 </template>

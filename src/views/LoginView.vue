@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
-import { loginByPassword, loginBySms, saveAuthSession, sendMobileCode } from '../api'
+import { loginByPassword, loginBySms, sendMobileCode } from '../api'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const activeTab = ref('password')
 const phone = ref('')
 const password = ref('')
@@ -98,7 +100,7 @@ async function handleSubmit() {
       })
     }
 
-    saveAuthSession(result.data)
+    authStore.setUser(result.data)
     setStatus('登录成功，正在进入首页', 'success')
 
     window.setTimeout(() => {

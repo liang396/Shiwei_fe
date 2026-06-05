@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
-import { registerByMobile, saveAuthSession, sendMobileCode } from '../api'
+import { registerByMobile, sendMobileCode } from '../api'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const form = ref({
   userAccount: '',
   verifyKey: '',
@@ -76,7 +78,7 @@ async function handleSubmit() {
       bindType: 3,
     })
 
-    saveAuthSession(result.data)
+    authStore.setUser(result.data)
     setStatus('注册成功，默认密码为 123456，正在进入首页', 'success')
 
     window.setTimeout(() => {
