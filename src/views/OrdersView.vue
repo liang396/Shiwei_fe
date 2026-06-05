@@ -1,17 +1,20 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
-import { fetchOrderPage, readAuthSession } from '../api'
+import { fetchOrderPage } from '../api'
 
 const route = useRoute()
 const router = useRouter()
-const currentUser = readAuthSession()
+const authStore = useAuthStore()
+const currentUser = computed(() => authStore.user)
 const orders = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const errorMessage = ref('')
 const nextLastId = ref(null)
+const nextCreatedTime = ref(null)
 const hasMore = ref(true)
 
 const ORDER_PAGE_SIZE = 6
@@ -29,6 +32,7 @@ async function loadOrders() {
     const page = await fetchOrderPage({ size: ORDER_PAGE_SIZE })
     orders.value = Array.isArray(page.records) ? page.records : []
     nextLastId.value = page.nextLastId ?? null
+    nextCreatedTime.value = page.nextCreatedTime ?? null
     hasMore.value = Boolean(page.hasMore)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '订单列表加载失败'
@@ -46,11 +50,13 @@ async function loadMoreOrders() {
   try {
     const page = await fetchOrderPage({
       lastId: nextLastId.value,
+      lastCreatedTime: nextCreatedTime.value,
       size: ORDER_PAGE_SIZE,
     })
     const records = Array.isArray(page.records) ? page.records : []
     orders.value = [...orders.value, ...records]
     nextLastId.value = page.nextLastId ?? null
+    nextCreatedTime.value = page.nextCreatedTime ?? null
     hasMore.value = Boolean(page.hasMore)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '订单分页加载失败'
@@ -68,7 +74,7 @@ function openOrderDetail(orderId) {
 }
 
 onMounted(() => {
-  if (!currentUser) {
+  if (!currentUser.value) {
     router.replace('/login')
     return
   }

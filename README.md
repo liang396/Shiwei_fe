@@ -6,6 +6,7 @@
 
 - Vue 3
 - Vue Router 4
+- Pinia
 - Vite
 - 原生 Fetch API
 
@@ -14,7 +15,7 @@
 ### 1. 首页与分类页
 
 - 展示首页主视觉和活动商品
-- 支持按大类/子类切换商品
+- 支持按大类 / 子类切换商品
 - 支持排序切换
 - 首页商品支持“加载更多”
 
@@ -73,6 +74,65 @@
 - 与后端订单流转链路打通
 - 秒杀活动与订单主流程衔接
 - 购物车、结算、订单查询的完整闭环
+- 路由懒加载
+- Pinia 登录态管理
+- API 模块化拆分
+- 路由守卫与 404 页面
+- 全局 Loading / 错误提示
+- GET 请求有限重试与重复请求取消
+
+## 前端工程化能力
+
+### 1. 路由懒加载
+
+页面采用按需加载方式，降低首屏包体积：
+
+- 首页
+- 登录 / 注册
+- 分类页
+- 商品详情
+- 购物车 / 结算
+- 订单列表 / 订单详情
+- 个人中心
+
+### 2. 状态管理
+
+已使用 `Pinia` 收口登录态：
+
+- `stores/auth.js`
+- `stores/ui.js`
+
+### 3. API 层治理
+
+API 已从单文件拆分为模块化结构：
+
+- `api/auth.js`
+- `api/product.js`
+- `api/order.js`
+- `api/cart.js`
+- `api/profile.js`
+- `api/promotion.js`
+- `api/seckill.js`
+- `api/address.js`
+- `api/payment.js`
+
+并统一通过 `api/http.js` 处理：
+
+- 401 失效清理
+- 全局错误提示
+- 全局 Loading
+- GET 请求有限重试
+- 重复请求取消
+
+### 4. 页面结构拆分
+
+首页已拆分为多个职责明确的组件：
+
+- `HomeTopBar`
+- `HomeCategoryTabs`
+- `HomeHero`
+- `HomeProductGrid`
+- `HomeBottomNav`
 
 ## 本地启动
 
@@ -98,7 +158,7 @@ npm run build
 
 接口地址默认写在：
 
-- `src/api.js`
+- `src/api/http.js`
 
 默认后端地址：
 
@@ -106,7 +166,11 @@ npm run build
 http://127.0.0.1:8102
 ```
 
-如果后端端口或地址变化，修改 `API_BASE_URL` 即可。
+如后端地址变化，可通过环境变量覆盖：
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:8102
+```
 
 ## 主要路由
 
