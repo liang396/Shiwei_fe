@@ -1,20 +1,33 @@
 # ShiWei Frontend
 
-基于 **Vue 3 + Vite** 构建的商城前端项目，对接 `ShiWei_be` 后端，覆盖商品浏览、详情、购物车、下单结算、订单查询、个人中心、优惠活动与秒杀体验等核心流程。
+基于 **Vue 3 + Vite** 构建的商城前端项目，对接 `Shiwei_be` 后端，覆盖商品浏览、商品详情、购物车、订单结算、订单查询、个人中心、优惠活动与秒杀体验等核心流程。
 
-## 项目速览
+> 🔗 **配套后端仓库**：[Shiwei_be](https://github.com/liang396/Shiwei_be) - 完整 API 由该后端提供
 
-- 技术栈：Vue 3、Vue Router、Pinia、Vite、原生 Fetch
-- 页面能力：首页活动流、商品分页、订单分页、购物车与结算、个人中心、秒杀体验
-- 工程化能力：路由懒加载、Pinia 登录态、API 模块化拆分、全局 Loading / Error、401 统一处理
-- 稳定性优化：GET 请求有限重试、重复请求取消、路由守卫、404 页面
-- 前后端联动：商品分页、订单分页、订单流转、模拟支付、个人中心聚合接口
+## 📌 项目速览
+
+- **技术栈**：Vue 3、Vue Router、Pinia、Vite、原生 Fetch
+- **核心功能**：商品分页浏览、购物车、订单结算、秒杀倒计时、个人中心
+- **工程化亮点**：
+  API 模块化 + 统一拦截器（重试、防重复请求、401 处理）
+  Pinia 状态管理 + 路由懒加载 + 路由守卫
+  首页组件拆分（TopBar、CategoryTabs、ProductGrid 等）
+- **稳定性**：GET 请求有限重试、重复请求取消、全局 Loading / Error 提示
+- **全栈联动**：完整对接后端订单流、秒杀流、商品分页、个人中心聚合接口
+
+## 📸 界面预览
+
+> 实际截图建议放在仓库 `screenshots/` 目录中。当前 README 已预留引用位置，你补图后会直接显示。
+
+![商品列表页](./screenshots/product-list.png)
+![购物车页面](./screenshots/cart.png)
+![订单列表](./screenshots/orders.png)
 
 ---
 
 ## 项目定位
 
-这个项目围绕完整商城交易流程组织页面状态与接口调用：
+这个前端项目围绕完整商城交易流程组织页面状态与接口调用：
 
 - 商品浏览到下单的完整闭环
 - 秒杀活动与普通订单流程并存
@@ -74,7 +87,7 @@
 
 ---
 
-## 当前工程化能力
+## 工程化能力
 
 ### 1. 路由懒加载
 
@@ -95,7 +108,7 @@
 
 - 登录保护页
 - 未登录跳转登录页并记录回跳地址
-- 已登录访问登录/注册页自动跳回首页
+- 已登录访问登录 / 注册页自动跳回首页
 - 404 路由兜底
 
 ### 3. 状态管理
@@ -128,6 +141,39 @@ API 已从单文件拆分为模块化结构：
 - GET 请求有限重试
 - 重复请求取消
 - 请求超时处理
+
+<details>
+<summary>📌 点击查看：重复请求取消核心代码</summary>
+
+```javascript
+const pendingRequests = new Map()
+
+function getRequestKey(path, options = {}) {
+  return `${path}:${options.method || 'GET'}:${options.body || ''}`
+}
+
+export async function request(path, options = {}) {
+  const requestKey = getRequestKey(path, options)
+
+  pendingRequests.get(requestKey)?.abort()
+  const controller = new AbortController()
+  pendingRequests.set(requestKey, controller)
+
+  try {
+    return await requestWithTimeout(
+      `${API_BASE_URL}${path}`,
+      {
+        ...options,
+        signal: controller.signal,
+      },
+      options.timeout || DEFAULT_TIMEOUT,
+    )
+  } finally {
+    pendingRequests.delete(requestKey)
+  }
+}
+```
+</details>
 
 ### 5. 页面结构拆分
 
