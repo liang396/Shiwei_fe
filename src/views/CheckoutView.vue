@@ -35,9 +35,8 @@ const addressForm = reactive({
 const selectedAddress = computed(() => addressList.value.find((item) => item.isDefault) || addressList.value[0] || null)
 const goodsAmount = computed(() => selectedItems.value.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0))
 const selectedCoupon = computed(() => availableCoupons.value.find((item) => item.couponId === selectedCouponId.value) || null)
-const selectedCouponNumbers = computed(() => String(selectedCoupon.value?.value || '').match(/\d+/g) || [])
-const selectedCouponThreshold = computed(() => (selectedCouponNumbers.value.length ? Number(selectedCouponNumbers.value[0]) : 0))
-const selectedCouponDiscount = computed(() => (selectedCouponNumbers.value.length > 1 ? Number(selectedCouponNumbers.value[1]) : 0))
+const selectedCouponThreshold = computed(() => Number(selectedCoupon.value?.thresholdAmount || 0))
+const selectedCouponDiscount = computed(() => Number(selectedCoupon.value?.discountAmount || 0))
 const discountAmount = computed(() => {
   if (!selectedCoupon.value) {
     return goodsAmount.value >= 200 ? 20 : 0
@@ -89,8 +88,8 @@ async function handleSubmitOrder() {
     const createdOrder = await submitOrder({
       addressId: selectedAddress.value.addressId,
       consignee: selectedAddress.value.consignee,
-      mobile: selectedAddress.value.mobile,
-      address: selectedAddress.value.address,
+      mobile: selectedAddress.value.mobileRaw || selectedAddress.value.mobile,
+      address: selectedAddress.value.addressRaw || selectedAddress.value.address,
       couponId: selectedCoupon.value?.couponId || null,
       couponTitle: selectedCoupon.value?.title || '',
       goodsAmount: goodsAmount.value,
@@ -142,7 +141,13 @@ function closeAddressPicker() {
 
 async function chooseAddress(address) {
   try {
-    await saveAddress({ ...address, isDefault: true })
+    await saveAddress({
+      addressId: address.addressId,
+      consignee: address.consignee,
+      mobile: address.mobileRaw || address.mobile,
+      address: address.addressRaw || address.address,
+      isDefault: true,
+    })
     await loadAddressList()
     closeAddressPicker()
   } catch (error) {
@@ -158,8 +163,8 @@ function openCreateAddress() {
 function openEditAddress(address) {
   addressForm.addressId = address.addressId
   addressForm.consignee = address.consignee
-  addressForm.mobile = address.mobile
-  addressForm.address = address.address
+  addressForm.mobile = address.mobileRaw || address.mobile
+  addressForm.address = address.addressRaw || address.address
   addressForm.isDefault = Boolean(address.isDefault)
   addressEditorVisible.value = true
 }

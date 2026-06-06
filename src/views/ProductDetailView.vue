@@ -22,23 +22,32 @@ const detail = ref(null)
 const seckillActivity = ref(null)
 const matchedSeckillGoods = ref(null)
 const countdownText = ref('00:00:00')
+const activeImageIndex = ref(0)
 let countdownTimer = null
+let galleryTimer = null
 
 const gallery = computed(() => {
-  const name = detail.value?.productName || '精选商品'
-  return Array.from({ length: 5 }, (_, index) => ({
+  const images = detail.value?.productImages || []
+  if (!images.length) {
+    return detail.value?.productImage
+      ? [{ id: 1, image: detail.value.productImage, label: `${detail.value.productName} 图 1` }]
+      : []
+  }
+  return images.slice(0, 5).map((image, index) => ({
     id: index + 1,
-    label: `${name} 图 ${index + 1}`,
+    image,
+    label: `${detail.value?.productName || '商品'} 图 ${index + 1}`,
   }))
 })
+
+const activeImage = computed(() => gallery.value[activeImageIndex.value]?.image || detail.value?.productImage || '')
 
 const detailTitle = computed(() => detail.value?.productName || '商品详情')
 const detailDesc = computed(() => {
   if (matchedSeckillGoods.value) {
     return `${detailTitle.value} 当前已进入特价秒杀活动，可直接查看秒杀价、剩余库存与抢购倒计时。`
   }
-
-  return `${detailTitle.value} 采用统一商品详情页承接，支持电脑端图文分栏和手机端底部吸附购买。`
+  return detail.value?.description || detailTitle.value
 })
 
 const originPrice = computed(() => {
@@ -84,6 +93,27 @@ function stopCountdown() {
   }
 }
 
+function stopGalleryLoop() {
+  if (galleryTimer) {
+    window.clearInterval(galleryTimer)
+    galleryTimer = null
+  }
+}
+
+function prevImage() {
+  if (!gallery.value.length) {
+    return
+  }
+  activeImageIndex.value = (activeImageIndex.value - 1 + gallery.value.length) % gallery.value.length
+}
+
+function nextImage() {
+  if (!gallery.value.length) {
+    return
+  }
+  activeImageIndex.value = (activeImageIndex.value + 1) % gallery.value.length
+}
+
 function formatCountdown(target) {
   const diff = Math.max(0, target - Date.now())
   const hours = String(Math.floor(diff / 3600000)).padStart(2, '0')
@@ -100,15 +130,33 @@ function startCountdown(endTime) {
   }, 1000)
 }
 
+function startGalleryLoop() {
+  stopGalleryLoop()
+  if (gallery.value.length <= 1) {
+    return
+  }
+  galleryTimer = window.setInterval(() => {
+    activeImageIndex.value = (activeImageIndex.value + 1) % gallery.value.length
+  }, 2800)
+}
+
+function chooseImage(index) {
+  activeImageIndex.value = index
+  startGalleryLoop()
+}
+
 async function loadProductDetail() {
   loading.value = true
   errorMessage.value = ''
   actionMessage.value = ''
   stopCountdown()
+  stopGalleryLoop()
 
   try {
     const productId = route.params.productId
     detail.value = await fetchProductDetail(productId)
+    activeImageIndex.value = 0
+    startGalleryLoop()
 
     const activities = await fetchSeckillActivities()
     const matchedActivity = activities.find((activity) =>
@@ -143,7 +191,7 @@ async function handleAddCart() {
     await addCartItem({
       productId: Number(route.params.productId),
       productName: detail.value.productName,
-      productImage: detail.value.productImage || '',
+      productImage: detail.value.productImage || gallery.value[0]?.image || '',
       price: displayPrice.value,
       quantity: 1,
     })
@@ -198,6 +246,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopCountdown()
+  stopGalleryLoop()
 })
 </script>
 
@@ -226,8 +275,14 @@ onBeforeUnmount(() => {
       </header>
 
       <section class="detail-gallery">
-        <article v-for="item in gallery" :key="item.id" class="detail-gallery__item">
-          <div class="detail-gallery__mock" :aria-label="item.label"></div>
+        <article
+          v-for="(item, index) in gallery"
+          :key="item.id"
+          class="detail-gallery__item"
+          :class="{ 'is-active': activeImageIndex === index }"
+          @click="chooseImage(index)"
+        >
+          <img class="detail-gallery__thumb" :src="item.image" :alt="item.label" />
         </article>
       </section>
 
@@ -270,7 +325,15 @@ onBeforeUnmount(() => {
             秒杀
             <small>{{ countdownText }}</small>
           </div>
-          <div class="detail-main-visual"></div>
+          <div class="detail-main-visual" @mouseenter="stopGalleryLoop" @mouseleave="startGalleryLoop">
+            <button class="detail-main-visual__arrow is-prev" type="button" @click="prevImage" aria-label="上一张">
+              ‹
+            </button>
+            <img v-if="activeImage" class="detail-main-visual__image" :src="activeImage" :alt="detailTitle" />
+            <button class="detail-main-visual__arrow is-next" type="button" @click="nextImage" aria-label="下一张">
+              ›
+            </button>
+          </div>
         </div>
 
         <div class="detail-content-card__text">

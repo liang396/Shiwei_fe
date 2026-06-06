@@ -142,7 +142,7 @@ function mapRemoteProduct(item) {
     subcategory: item.subcategory,
     sales: Number(item.sales ?? 0),
     popularity: Number(item.popularity ?? 0),
-    badges: item.featured ? ['后端热卖'] : ['商品在售'],
+    badges: item.featured ? ['当前热卖'] : ['商品在售'],
     featured: Boolean(item.featured),
   }
 }

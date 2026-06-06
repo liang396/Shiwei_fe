@@ -2,7 +2,14 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { deleteAddress, fetchProfileOverview, readAuthSession, saveAddress, saveAuthSession, saveProfileUser } from '../api'
+import {
+  deleteAddress,
+  fetchProfileOverview,
+  readAuthSession,
+  saveAddress,
+  saveAuthSession,
+  saveProfileUser,
+} from '../api'
 
 const router = useRouter()
 const currentUser = readAuthSession()
@@ -14,6 +21,7 @@ const profile = ref(null)
 const activeSection = ref('orders')
 const showAddressForm = ref(false)
 const showProfileForm = ref(false)
+
 const addressForm = reactive({
   addressId: null,
   consignee: '',
@@ -21,70 +29,52 @@ const addressForm = reactive({
   address: '',
   isDefault: false,
 })
+
 const profileForm = reactive({
   userId: 1,
   nickname: '',
   avatar: '🙂',
 })
-const avatarOptions = ['🙂', '😊', '😎', '🧑', '👩', '👨', '🛍️', '🌟']
 
-const quickCards = computed(() => [
+const avatarOptions = ['🙂', '😉', '😄', '😎', '🧑', '👩', '🧃', '🎈']
+
+const memberLabel = computed(() => profile.value?.user?.memberLevel || '普通会员')
+const recentOrders = computed(() => (profile.value?.recentOrders || []).slice(0, 6))
+
+const statsCards = computed(() => [
   {
-    key: 'orders',
-    title: '我的订单',
-    desc: `${profile.value?.orderStats?.total ?? 0} 笔订单`,
-    action: () => router.push('/orders'),
+    key: 'pending',
+    title: '待支付',
+    value: profile.value?.orderStats?.pending ?? 0,
+    tone: 'blue',
+    action: () => {
+      activeSection.value = 'orders'
+      router.push('/orders?status=0')
+    },
   },
   {
-    key: 'addresses',
-    title: '收货地址',
-    desc: `${profile.value?.addresses?.length ?? 0} 个常用地址`,
+    key: 'total',
+    title: '累计订单',
+    value: profile.value?.orderStats?.total ?? 0,
+    tone: 'gold',
     action: () => {
-      activeSection.value = 'addresses'
+      activeSection.value = 'orders'
+      router.push('/orders')
     },
   },
 ])
 
-const infoRows = computed(() => [
-  {
-    key: 'profile',
-    title: '个人信息',
-    desc: profile.value?.user?.phone || '未绑定手机号',
-    action: () => {
-      activeSection.value = 'profile'
-    },
-  },
-  {
-    key: 'reviews',
-    title: '我的评价',
-    desc: `${profile.value?.reviews?.length ?? 0} 条评价`,
-    action: () => {
-      activeSection.value = 'reviews'
-    },
-  },
-  {
-    key: 'coupons',
-    title: '我的优惠券',
-    desc: `${profile.value?.coupons?.length ?? 0} 张优惠券`,
-    action: () => {
-      activeSection.value = 'coupons'
-    },
-  },
+const sidebarLinks = computed(() => [
+  { key: 'orders', title: '我的订单' },
+  { key: 'addresses', title: '收货地址' },
+  { key: 'reviews', title: '我的评价' },
+  { key: 'coupons', title: '我的优惠券' },
 ])
 
-const sectionTitle = computed(() => {
-  const map = {
-    orders: '最近订单',
-    addresses: '收货地址',
-    profile: '个人信息',
-    reviews: '我的评价',
-    coupons: '我的优惠券',
-  }
-  return map[activeSection.value] || '个人中心'
-})
-
-function renderPrice(price) {
-  return Number(price || 0).toFixed(2)
+function syncProfileForm() {
+  profileForm.userId = profile.value?.user?.userId || 1
+  profileForm.nickname = profile.value?.user?.nickname || ''
+  profileForm.avatar = profile.value?.user?.avatar || '🙂'
 }
 
 function resetAddressForm() {
@@ -95,10 +85,52 @@ function resetAddressForm() {
   addressForm.isDefault = false
 }
 
-function syncProfileForm() {
-  profileForm.userId = profile.value?.user?.userId || 1
-  profileForm.nickname = profile.value?.user?.nickname || ''
-  profileForm.avatar = profile.value?.user?.avatar || '🙂'
+function renderPrice(price) {
+  return Number(price || 0).toFixed(2)
+}
+
+function orderBadgeText(order) {
+  if (order.orderStatusCode === 0) {
+    return '待支付'
+  }
+  if (order.orderStatusCode === 1) {
+    return '已取消'
+  }
+  return order.orderStatus || '已完成'
+}
+
+function orderAmountText(order) {
+  if (order.orderStatusCode === 0) {
+    return `待支付 ￥${renderPrice(order.payAmount)}`
+  }
+  if (order.orderStatusCode === 1) {
+    return order.cancelReason ? `已取消 · ${order.cancelReason}` : '已取消'
+  }
+  return `实付 ￥${renderPrice(order.payAmount)}`
+}
+
+function orderTitle(order) {
+  return order.items?.[0]?.productName || '订单商品'
+}
+
+function orderIconTone(order) {
+  if (order.orderStatusCode === 0) {
+    return 'red'
+  }
+  if (order.orderStatusCode === 1) {
+    return 'gray'
+  }
+  return 'blue'
+}
+
+function orderStatusToneClass(order) {
+  if (order.orderStatusCode === 0) {
+    return 'is-red'
+  }
+  if (order.orderStatusCode === 1) {
+    return 'is-gray'
+  }
+  return 'is-green'
 }
 
 function openCreateAddress() {
@@ -109,8 +141,8 @@ function openCreateAddress() {
 function openEditAddress(address) {
   addressForm.addressId = address.addressId
   addressForm.consignee = address.consignee
-  addressForm.mobile = address.mobile
-  addressForm.address = address.address
+  addressForm.mobile = address.mobileRaw || address.mobile
+  addressForm.address = address.addressRaw || address.address
   addressForm.isDefault = Boolean(address.isDefault)
   showAddressForm.value = true
 }
@@ -158,6 +190,32 @@ async function handleSaveAddress() {
   }
 }
 
+async function handleDeleteAddress(addressId) {
+  errorMessage.value = ''
+  try {
+    await deleteAddress(addressId)
+    await loadProfileOverview()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '地址删除失败'
+  }
+}
+
+async function handleSetDefaultAddress(address) {
+  errorMessage.value = ''
+  try {
+    await saveAddress({
+      addressId: address.addressId,
+      consignee: address.consignee,
+      mobile: address.mobileRaw || address.mobile,
+      address: address.addressRaw || address.address,
+      isDefault: true,
+    })
+    await loadProfileOverview()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '默认地址设置失败'
+  }
+}
+
 async function handleSaveProfile() {
   savingProfile.value = true
   errorMessage.value = ''
@@ -176,18 +234,13 @@ async function handleSaveProfile() {
   }
 }
 
-async function handleDeleteAddress(addressId) {
-  errorMessage.value = ''
-  try {
-    await deleteAddress(addressId)
-    await loadProfileOverview()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '地址删除失败'
-  }
+function openOrder(orderNo) {
+  router.push({ path: `/orders/${orderNo}`, query: { from: 'profile' } })
 }
 
-function openOrder(orderId) {
-  router.push(`/orders/${orderId}`)
+function goAllOrders() {
+  activeSection.value = 'orders'
+  router.push('/orders')
 }
 
 onMounted(() => {
@@ -195,24 +248,27 @@ onMounted(() => {
     router.replace('/login')
     return
   }
-
   loadProfileOverview()
 })
 </script>
 
 <template>
-  <main class="profile-shell">
-    <section class="profile-frame">
-      <header class="profile-topbar">
+  <main class="account-page">
+    <section v-if="errorMessage" class="category-status category-status--error">
+      {{ errorMessage }}
+    </section>
+
+    <template v-else>
+      <header class="profile-topbar account-page-topbar">
         <div class="category-heading">
           <div>
-            <p class="category-heading__eyebrow">Profile</p>
+            <p class="category-heading__eyebrow">PROFILE HUB</p>
             <h1>我的</h1>
-            <p class="category-heading__desc">订单、地址、昵称、头像和评价都集中在这里。</p>
+            <p class="category-heading__desc">查看订单、收货地址、评价和优惠券，点击头像可以直接修改个人信息。</p>
           </div>
         </div>
 
-        <nav class="home-desktop-nav" aria-label="个人中心导航">
+        <nav class="home-desktop-nav" aria-label="桌面导航">
           <button class="desktop-nav__item" type="button" @click="router.push('/')">首页</button>
           <button class="desktop-nav__item" type="button" @click="router.push('/category')">优惠活动</button>
           <button class="desktop-nav__item" type="button" @click="router.push('/cart')">购物车</button>
@@ -220,157 +276,174 @@ onMounted(() => {
         </nav>
       </header>
 
-      <section v-if="errorMessage" class="category-status category-status--error">
-        {{ errorMessage }}
-      </section>
+      <section class="account-wrap account-wrap--clean">
+        <aside class="account-sidebar account-sidebar--clean">
+          <div class="account-sidebar__card account-sidebar__card--clean">
+            <button class="account-avatar-card account-avatar-card--clean" type="button" @click="openProfileForm">
+              <div class="account-avatar account-avatar--clean">{{ profile?.user?.avatar || '🙂' }}</div>
+              <div class="account-avatar__meta account-avatar__meta--clean">
+                <h2>{{ profile?.user?.nickname || profile?.user?.username || '拾味用户' }}</h2>
+                <p>{{ profile?.user?.phone || '未绑定手机号' }}</p>
+              </div>
+            </button>
 
-      <template v-else>
-        <section class="profile-hero">
-          <div class="profile-avatar">{{ profile?.user?.avatar || '🙂' }}</div>
-          <div class="profile-hero__content">
-            <h2>{{ profile?.user?.nickname || profile?.user?.username || '拾味用户' }}</h2>
-            <p>{{ profile?.user?.phone || '未绑定手机号' }}</p>
-            <div class="profile-badges">
-              <span>待支付 {{ profile?.orderStats?.pending ?? 0 }}</span>
-              <span>累计订单 {{ profile?.orderStats?.total ?? 0 }}</span>
-              <span>{{ profile?.user?.memberLevel || '普通会员' }}</span>
-            </div>
+            <div class="account-member-pill">{{ memberLabel }}</div>
           </div>
-        </section>
 
-        <section class="profile-layout">
-          <aside class="profile-sidebar">
-            <button class="profile-side-link" :class="{ 'is-active': activeSection === 'orders' }" type="button" @click="activeSection = 'orders'">我的订单</button>
-            <button class="profile-side-link" :class="{ 'is-active': activeSection === 'addresses' }" type="button" @click="activeSection = 'addresses'">收货地址</button>
-            <button class="profile-side-link" :class="{ 'is-active': activeSection === 'profile' }" type="button" @click="activeSection = 'profile'">个人信息</button>
-            <button class="profile-side-link" :class="{ 'is-active': activeSection === 'reviews' }" type="button" @click="activeSection = 'reviews'">我的评价</button>
-            <button class="profile-side-link" :class="{ 'is-active': activeSection === 'coupons' }" type="button" @click="activeSection = 'coupons'">我的优惠券</button>
-          </aside>
+          <nav class="account-nav account-nav--clean">
+            <button
+              v-for="link in sidebarLinks"
+              :key="link.key"
+              class="account-nav__item account-nav__item--clean"
+              :class="{ 'is-active': activeSection === link.key }"
+              type="button"
+              @click="activeSection = link.key"
+            >
+              <span>{{ link.title }}</span>
+              <span class="account-nav__arrow">›</span>
+            </button>
+          </nav>
+        </aside>
 
-          <section class="profile-content">
-            <div class="profile-card-grid">
-              <button v-for="card in quickCards" :key="card.key" class="profile-shortcut-card" type="button" @click="card.action">
-                <div>
+        <section class="account-main account-main--clean">
+          <section v-if="loading" class="profile-panel profile-empty-state">
+            <p>正在同步个人中心数据...</p>
+          </section>
+
+          <template v-else>
+            <section class="account-stats account-stats--clean">
+              <article
+                v-for="card in statsCards"
+                :key="card.key"
+                class="account-stat-card account-stat-card--clean"
+                :class="`is-${card.tone}`"
+                @click="card.action"
+              >
+                <div class="account-stat-card__text">
                   <h3>{{ card.title }}</h3>
-                  <p>{{ card.desc }}</p>
+                  <strong>{{ card.value }}</strong>
                 </div>
-                <span>›</span>
-              </button>
-            </div>
+                <div class="account-stat-card__ring"></div>
+              </article>
+            </section>
 
-            <section class="profile-panel">
-              <div class="profile-section-title">
-                <h3>{{ sectionTitle }}</h3>
-                <button v-if="activeSection === 'addresses'" class="profile-add-button" type="button" @click="openCreateAddress">新增地址</button>
-                <button v-if="activeSection === 'profile'" class="profile-add-button" type="button" @click="openProfileForm">编辑资料</button>
+            <section v-if="activeSection === 'orders'" class="profile-panel account-orders-panel account-orders-panel--clean">
+              <div class="profile-section-title account-orders-panel__head">
+                <h3>最近订单</h3>
+                <button class="profile-add-button" type="button" @click="goAllOrders">查看全部</button>
               </div>
 
-              <div v-if="loading" class="profile-empty-state">
-                <p>正在同步个人中心数据...</p>
-              </div>
-
-              <template v-else>
-                <div v-if="activeSection === 'orders'" class="profile-orders">
-                  <article
-                    v-for="order in profile?.recentOrders || []"
-                    :key="order.orderId"
-                    class="profile-order-card"
-                    @click="openOrder(order.orderId)"
-                  >
-                    <div>
-                      <h4>{{ order.orderNo }}</h4>
+              <div class="account-order-list account-order-list--clean">
+                <article
+                  v-for="order in recentOrders"
+                  :key="order.orderId"
+                  class="account-order-item account-order-item--clean"
+                  @click="openOrder(order.orderNo)"
+                >
+                  <div class="account-order-item__lead">
+                    <div class="account-order-item__icon account-order-item__icon--clean" :class="`is-${orderIconTone(order)}`"></div>
+                    <div class="account-order-item__main account-order-item__main--clean">
+                      <h4>{{ orderTitle(order) }}</h4>
+                      <p>订单号：{{ order.orderNo }}</p>
                       <p>{{ order.createdTime || '刚刚创建' }}</p>
                     </div>
-                    <div class="profile-order-card__meta">
-                      <span>{{ order.orderStatus }}</span>
-                      <strong>¥{{ renderPrice(order.payAmount) }}</strong>
-                    </div>
-                  </article>
-                </div>
+                  </div>
 
-                <div v-else-if="activeSection === 'addresses'" class="profile-list">
-                  <article v-for="address in profile?.addresses || []" :key="address.addressId" class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>{{ address.consignee }} {{ address.mobile }}</strong>
-                      <p>{{ address.address }}</p>
-                    </div>
-                    <div class="profile-address-actions">
-                      <span class="profile-chip" v-if="address.isDefault">默认</span>
-                      <button class="profile-inline-button" type="button" @click="openEditAddress(address)">编辑</button>
-                      <button class="profile-inline-button profile-inline-button--danger" type="button" @click="handleDeleteAddress(address.addressId)">删除</button>
-                    </div>
-                  </article>
-                </div>
-
-                <div v-else-if="activeSection === 'profile'" class="profile-list">
-                  <article class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>头像</strong>
-                      <p>{{ profile?.user?.avatar || '🙂' }}</p>
-                    </div>
-                  </article>
-                  <article class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>用户名</strong>
-                      <p>{{ profile?.user?.username || '-' }}</p>
-                    </div>
-                  </article>
-                  <article class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>昵称</strong>
-                      <p>{{ profile?.user?.nickname || '-' }}</p>
-                    </div>
-                  </article>
-                  <article class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>手机号</strong>
-                      <p>{{ profile?.user?.phone || '-' }}</p>
-                    </div>
-                  </article>
-                </div>
-
-                <div v-else-if="activeSection === 'reviews'" class="profile-list">
-                  <article v-for="review in profile?.reviews || []" :key="review.reviewId" class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>{{ review.productName }}</strong>
-                      <p>{{ review.content }}</p>
-                    </div>
-                    <span class="profile-chip">{{ review.score }} 分</span>
-                  </article>
-                </div>
-
-                <div v-else class="profile-list">
-                  <article v-for="coupon in profile?.coupons || []" :key="coupon.couponId" class="profile-list-item profile-list-item--static">
-                    <div>
-                      <strong>{{ coupon.title }} · {{ coupon.value }}</strong>
-                      <p>{{ coupon.description }}</p>
-                    </div>
-                    <span class="profile-chip">{{ coupon.status === 'USED' ? '已使用' : coupon.claimed ? '已领取' : '可领取' }}</span>
-                  </article>
-                </div>
-              </template>
+                  <div class="account-order-item__side account-order-item__side--clean">
+                    <span class="profile-chip" :class="{ 'is-gray': order.orderStatusCode === 1, 'is-red': order.orderStatusCode === 0 }">
+                      {{ orderBadgeText(order) }}
+                    </span>
+                    <strong>￥{{ renderPrice(order.payAmount) }}</strong>
+                    <p :class="orderStatusToneClass(order)">{{ orderAmountText(order) }}</p>
+                  </div>
+                </article>
+              </div>
             </section>
 
-            <section class="profile-panel profile-menu-list">
-              <button v-for="row in infoRows" :key="row.key" class="profile-list-item" type="button" @click="row.action">
-                <div>
-                  <strong>{{ row.title }}</strong>
-                  <p>{{ row.desc }}</p>
-                </div>
-                <span>›</span>
-              </button>
+            <section v-if="activeSection === 'addresses'" class="profile-panel">
+              <div class="profile-section-title">
+                <h3>收货地址</h3>
+                <button class="profile-add-button" type="button" @click="openCreateAddress">新增地址</button>
+              </div>
+
+              <div class="profile-list">
+                <article
+                  v-for="address in profile?.addresses || []"
+                  :key="address.addressId"
+                  class="profile-list-item profile-list-item--static"
+                >
+                  <div>
+                    <strong>{{ address.consignee }} {{ address.mobile }}</strong>
+                    <p>{{ address.address }}</p>
+                  </div>
+                  <div class="profile-address-actions">
+                  <button
+                    class="profile-inline-button"
+                    type="button"
+                    :disabled="address.isDefault"
+                    @click="handleSetDefaultAddress(address)"
+                  >
+                    {{ address.isDefault ? '默认地址' : '设为默认' }}
+                  </button>
+                    <button class="profile-inline-button" type="button" @click="openEditAddress(address)">编辑</button>
+                    <button class="profile-inline-button profile-inline-button--danger" type="button" @click="handleDeleteAddress(address.addressId)">删除</button>
+                  </div>
+                </article>
+              </div>
             </section>
-          </section>
+
+            <section v-if="activeSection === 'reviews'" class="profile-panel">
+              <div class="profile-section-title">
+                <h3>我的评价</h3>
+              </div>
+
+              <div class="profile-list">
+                <article
+                  v-for="review in profile?.reviews || []"
+                  :key="review.reviewId"
+                  class="profile-list-item profile-list-item--static"
+                >
+                  <div>
+                    <strong>{{ review.productName }}</strong>
+                    <p>{{ review.content }}</p>
+                  </div>
+                  <span class="profile-chip">{{ review.score }} 分</span>
+                </article>
+              </div>
+            </section>
+
+            <section v-if="activeSection === 'coupons'" class="profile-panel">
+              <div class="profile-section-title">
+                <h3>我的优惠券</h3>
+              </div>
+
+              <div class="profile-list">
+                <article
+                  v-for="coupon in profile?.coupons || []"
+                  :key="coupon.couponId"
+                  class="profile-list-item profile-list-item--static"
+                >
+                  <div>
+                    <strong>{{ coupon.title }} · {{ coupon.value }}</strong>
+                    <p>{{ coupon.description }}</p>
+                  </div>
+                  <span class="profile-chip">
+                    {{ coupon.status === 'USED' ? '已使用' : coupon.claimed ? '已领取' : '可领取' }}
+                  </span>
+                </article>
+              </div>
+            </section>
+          </template>
         </section>
-      </template>
+      </section>
+    </template>
 
-      <nav class="bottom-nav" aria-label="个人中心底部导航">
-        <button class="bottom-nav__item" type="button" @click="router.push('/')"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8" /></svg></span><span>首页</span></button>
-        <button class="bottom-nav__item" type="button" @click="router.push('/category')"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /><rect x="14" y="4" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /><rect x="4" y="14" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /><rect x="14" y="14" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /></svg></span><span>活动</span></button>
-        <button class="bottom-nav__item" type="button" @click="router.push('/cart')"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 6h2l1.2 7.2a1 1 0 0 0 1 .8h7.8a1 1 0 0 0 1-.78L19 8H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" /><circle cx="10" cy="18.5" r="1.5" fill="currentColor" /><circle cx="17" cy="18.5" r="1.5" fill="currentColor" /></svg></span><span>购物车</span></button>
-        <button class="bottom-nav__item is-active" type="button"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" /><path d="M5 20a7 7 0 0 1 14 0" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" /></svg></span><span>我的</span></button>
-      </nav>
-    </section>
+    <nav class="bottom-nav" aria-label="个人中心底部导航">
+      <button class="bottom-nav__item" type="button" @click="router.push('/')"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.8" /></svg></span><span>首页</span></button>
+      <button class="bottom-nav__item" type="button" @click="router.push('/category')"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /><rect x="14" y="4" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /><rect x="4" y="14" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /><rect x="14" y="14" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8" /></svg></span><span>优惠活动</span></button>
+      <button class="bottom-nav__item" type="button" @click="router.push('/cart')"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 6h2l1.2 7.2a1 1 0 0 0 1 .8h7.8a1 1 0 0 0 1-.78L19 8H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" /><circle cx="10" cy="18.5" r="1.5" fill="currentColor" /><circle cx="17" cy="18.5" r="1.5" fill="currentColor" /></svg></span><span>购物车</span></button>
+      <button class="bottom-nav__item is-active" type="button"><span class="bottom-nav__icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" /><path d="M5 20a7 7 0 0 1 14 0" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" /></svg></span><span>我的</span></button>
+    </nav>
 
     <div v-if="showAddressForm" class="payment-mask">
       <section class="payment-modal profile-address-modal">

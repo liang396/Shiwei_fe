@@ -13,7 +13,7 @@ export async function fetchOrderList() {
   return Array.isArray(response?.data) ? response.data : []
 }
 
-export async function fetchOrderPage({ lastId, size, lastCreatedTime } = {}) {
+export async function fetchOrderPage({ lastId, size, lastCreatedTime, status } = {}) {
   const query = new URLSearchParams()
   if (lastId !== undefined && lastId !== null && lastId !== '') {
     query.set('lastId', String(lastId))
@@ -24,6 +24,9 @@ export async function fetchOrderPage({ lastId, size, lastCreatedTime } = {}) {
   if (lastCreatedTime !== undefined && lastCreatedTime !== null && lastCreatedTime !== '') {
     query.set('lastCreatedTime', String(lastCreatedTime))
   }
+  if (status !== undefined && status !== null && status !== '') {
+    query.set('status', String(status))
+  }
   const suffix = query.toString() ? `?${query.toString()}` : ''
   const response = await jsonRequest(`/order/page${suffix}`, { method: 'GET' })
   return response?.data || { records: [], nextLastId: null, nextCreatedTime: null, hasMore: false }
@@ -31,5 +34,13 @@ export async function fetchOrderPage({ lastId, size, lastCreatedTime } = {}) {
 
 export async function fetchOrderDetail(orderId) {
   const response = await jsonRequest(`/order/${orderId}`, { method: 'GET' })
+  return response?.data || null
+}
+
+export async function updateOrderDetailOptions(orderKey, payload) {
+  const response = await jsonRequest(`/order/${orderKey}/detail-options`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
   return response?.data || null
 }

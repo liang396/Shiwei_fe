@@ -115,6 +115,13 @@ onMounted(() => {
   <main class="cart-shell">
     <section class="cart-frame">
       <header class="cart-header">
+        <nav class="home-desktop-nav cart-desktop-nav" aria-label="桌面导航">
+          <button class="desktop-nav__item" type="button" @click="router.push('/')">首页</button>
+          <button class="desktop-nav__item" type="button" @click="goCategory">优惠活动</button>
+          <button class="desktop-nav__item is-active" type="button">购物车</button>
+          <button class="desktop-nav__item" type="button" @click="goProfile">我的</button>
+        </nav>
+
         <button class="category-back" type="button" @click="goCategory" aria-label="返回活动页">
           <svg viewBox="0 0 24 24" fill="none">
             <path d="M15 5 8 12l7 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
@@ -123,7 +130,6 @@ onMounted(() => {
 
         <div class="cart-header__title">
           <h1>购物车</h1>
-          <p>登录同步本地购物车</p>
         </div>
       </header>
 
