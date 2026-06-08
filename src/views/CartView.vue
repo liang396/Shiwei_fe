@@ -155,7 +155,9 @@ onMounted(() => {
             <span v-if="item.checked">✓</span>
           </button>
 
-          <div class="cart-thumb"></div>
+          <div class="cart-thumb">
+            <img v-if="item.productImage" :src="item.productImage" :alt="item.productName" />
+          </div>
 
           <div class="cart-card__content">
             <div>

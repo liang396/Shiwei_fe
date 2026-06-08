@@ -64,6 +64,10 @@ function resolveProductCardImage(product) {
   return product?.productImage || ''
 }
 
+function resolveProductCartImage(product) {
+  return resolveProductCardImage(product)
+}
+
 function resolveTheme(product) {
   return `theme-${product.theme || 'electronics-phone'}`
 }
@@ -200,7 +204,7 @@ async function handleAddCart(product) {
     await addCartItem({
       productId: product.productId ?? product.id,
       productName: product.name,
-      productImage: '',
+      productImage: resolveProductCartImage(product),
       price: product.price,
       quantity: 1,
     })

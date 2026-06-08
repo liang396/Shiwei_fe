@@ -113,6 +113,19 @@ function renderPrice(price) {
   return Number(price || 0).toFixed(2)
 }
 
+function resolveProductCartImage(product) {
+  const images = Array.isArray(product?.productImages)
+    ? product.productImages.filter((item) => typeof item === 'string' && item.trim())
+    : []
+
+  if (images.length) {
+    const seed = Number(product?.productId ?? product?.id ?? 0)
+    return images[Math.abs(seed) % images.length]
+  }
+
+  return product?.productImage || ''
+}
+
 function mapPromotionHeroProduct(item) {
   return {
     id: item.productId,
@@ -229,7 +242,7 @@ async function handleAddCart(product) {
     await addCartItem({
       productId: product.id,
       productName: product.name,
-      productImage: '',
+      productImage: resolveProductCartImage(product),
       price: product.price,
       quantity: 1,
     })
