@@ -51,8 +51,29 @@ function renderPrice(price) {
   return Number(price).toFixed(2)
 }
 
+function resolveProductCardImage(product) {
+  const images = Array.isArray(product?.productImages)
+    ? product.productImages.filter((item) => typeof item === 'string' && item.trim())
+    : []
+
+  if (images.length) {
+    const seed = Number(product?.productId ?? product?.id ?? 0)
+    return images[Math.abs(seed) % images.length]
+  }
+
+  return product?.productImage || ''
+}
+
 function resolveTheme(product) {
   return `theme-${product.theme || 'electronics-phone'}`
+}
+
+function withProductImages(product) {
+  return {
+    ...product,
+    productImage: product?.productImage || '',
+    productImages: Array.isArray(product?.productImages) ? product.productImages : [],
+  }
 }
 
 function stopCountdown() {
@@ -130,7 +151,7 @@ async function loadSeckillActivity() {
     const detail = await fetchSeckillActivityDetail(active.activityId)
     seckillActivity.value = detail
     seckillGoods.value = Array.isArray(detail?.goodsList)
-      ? detail.goodsList.slice(0, 4).map(mapSeckillGoods)
+      ? detail.goodsList.slice(0, 4).map((item, index) => withProductImages(mapSeckillGoods(item, index)))
       : []
 
     if (detail?.endTime) {
@@ -151,7 +172,9 @@ async function loadCoupons() {
 
 async function loadSpecialProducts() {
   const data = await fetchPromotionSpecialProducts()
-  saleProducts.value = data.filter((item) => item.status === 'ACTIVE').map(mapPromotionProduct)
+  saleProducts.value = data
+    .filter((item) => item.status === 'ACTIVE')
+    .map((item) => withProductImages(mapPromotionProduct(item)))
 }
 
 function handleNavClick(item) {
@@ -292,11 +315,12 @@ onBeforeUnmount(() => {
             @click="openProductDetail(product.productId)"
           >
             <div class="category-product-card__visual" :class="resolveTheme(product)">
-              <div class="plate">
-                <div class="plate-item"></div>
-                <div class="plate-item"></div>
-                <div class="plate-item"></div>
-              </div>
+              <img
+                v-if="resolveProductCardImage(product)"
+                class="category-product-card__image"
+                :src="resolveProductCardImage(product)"
+                :alt="product.name"
+              />
             </div>
 
             <div class="category-product-card__content">
@@ -389,11 +413,12 @@ onBeforeUnmount(() => {
             @click="openProductDetail(product.id)"
           >
             <div class="category-product-card__visual" :class="resolveTheme(product)">
-              <div class="plate">
-                <div class="plate-item"></div>
-                <div class="plate-item"></div>
-                <div class="plate-item"></div>
-              </div>
+              <img
+                v-if="resolveProductCardImage(product)"
+                class="category-product-card__image"
+                :src="resolveProductCardImage(product)"
+                :alt="product.name"
+              />
             </div>
 
             <div class="category-product-card__content">

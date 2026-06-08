@@ -15,11 +15,12 @@
       @click="$emit('open-product', product.id)"
     >
       <div class="product-visual" :class="`theme-${product.theme}`">
-        <div class="plate">
-          <div class="plate-item"></div>
-          <div class="plate-item"></div>
-          <div class="plate-item"></div>
-        </div>
+        <img
+          v-if="resolveProductCardImage(product)"
+          class="product-visual__image"
+          :src="resolveProductCardImage(product)"
+          :alt="product.name"
+        />
       </div>
 
       <div class="product-content">
@@ -50,6 +51,20 @@
 </template>
 
 <script setup>
+function resolveProductCardImage(product) {
+  const images = Array.isArray(product?.productImages)
+    ? product.productImages.filter((item) => typeof item === 'string' && item.trim())
+    : []
+
+  if (images.length) {
+    const seed = Number(product?.productId ?? product?.id ?? 0)
+    const index = Math.abs(seed) % images.length
+    return images[index]
+  }
+
+  return product?.productImage || ''
+}
+
 defineProps({
   activeMainCategory: String,
   featuredProducts: Array,

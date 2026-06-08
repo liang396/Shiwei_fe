@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -49,6 +49,14 @@ const detailDesc = computed(() => {
   }
   return detail.value?.description || detailTitle.value
 })
+
+const detailContent = computed(() => detail.value?.detailContent || detail.value?.description || detailDesc.value)
+const detailParagraphs = computed(() =>
+  String(detailContent.value || '')
+    .split(/\n{2,}/)
+    .map((item) => item.trim())
+    .filter(Boolean),
+)
 
 const originPrice = computed(() => {
   if (matchedSeckillGoods.value?.originalPrice != null) {
@@ -274,85 +282,120 @@ onBeforeUnmount(() => {
         </nav>
       </header>
 
-      <section class="detail-gallery">
-        <article
-          v-for="(item, index) in gallery"
-          :key="item.id"
-          class="detail-gallery__item"
-          :class="{ 'is-active': activeImageIndex === index }"
-          @click="chooseImage(index)"
-        >
-          <img class="detail-gallery__thumb" :src="item.image" :alt="item.label" />
-        </article>
-      </section>
-
       <section class="detail-summary-card">
-        <div class="detail-summary-card__header">
-          <div>
-            <h2>{{ detailTitle }}</h2>
-            <p>{{ detailDesc }}</p>
-          </div>
-          <div v-if="isSeckill" class="detail-countdown">
-            <span>秒杀倒计时</span>
-            <strong>{{ countdownText }}</strong>
-          </div>
-        </div>
-
-        <div class="detail-pricing">
-          <div class="detail-price-primary">
-            <span class="price-symbol">¥</span>
-            <strong>{{ renderPrice(displayPrice) }}</strong>
-            <small>剩余 {{ remainStock }} 件</small>
-          </div>
-
-          <div class="detail-progress">
-            <div class="detail-progress__track">
-              <span class="detail-progress__value" :style="{ width: `${progressPercent}%` }"></span>
+        <div class="detail-summary-card__hero">
+          <div class="detail-summary-card__media">
+            <div class="detail-main-visual" @mouseenter="stopGalleryLoop" @mouseleave="startGalleryLoop">
+              <button class="detail-main-visual__arrow is-prev" type="button" @click="prevImage" aria-label="上一张">
+                ‹
+              </button>
+              <img v-if="activeImage" class="detail-main-visual__image" :src="activeImage" :alt="detailTitle" />
+              <button class="detail-main-visual__arrow is-next" type="button" @click="nextImage" aria-label="下一张">
+                ›
+              </button>
             </div>
+            <section class="detail-gallery detail-gallery--hero">
+              <article
+                v-for="(item, index) in gallery"
+                :key="item.id"
+                class="detail-gallery__item"
+                :class="{ 'is-active': activeImageIndex === index }"
+                @click="chooseImage(index)"
+              >
+                <img class="detail-gallery__thumb" :src="item.image" :alt="item.label" />
+              </article>
+            </section>
           </div>
 
-          <div class="detail-price-secondary">
-            <span class="price-symbol">¥</span>
-            <strong>{{ renderPrice(originPrice) }}</strong>
-            <small>{{ isSeckill ? '原价展示' : '当前售价' }}</small>
+          <div class="detail-summary-card__info">
+            <div class="detail-summary-card__header">
+              <div>
+                <h2>{{ detailTitle }}</h2>
+                <p>{{ detailDesc }}</p>
+              </div>
+              <div v-if="isSeckill" class="detail-countdown">
+                <span>秒杀倒计时</span>
+                <strong>{{ countdownText }}</strong>
+              </div>
+            </div>
+
+            <div class="detail-pricing">
+              <div class="detail-price-primary">
+                <span class="price-symbol">¥</span>
+                <strong>{{ renderPrice(displayPrice) }}</strong>
+                <small>已售 {{ detail?.sales ?? 0 }}+ 件</small>
+              </div>
+
+              <div class="detail-progress">
+                <div class="detail-progress__track">
+                  <span class="detail-progress__value" :style="{ width: `${progressPercent}%` }"></span>
+                </div>
+              </div>
+
+              <div class="detail-price-secondary">
+                <small>原价</small>
+                <strong>¥{{ renderPrice(originPrice) }}</strong>
+              </div>
+            </div>
+
+            <div class="detail-core-params">
+              <span v-if="detail?.subcategory" class="detail-core-params__tag">{{ detail.subcategory }}</span>
+              <span v-if="detail?.theme" class="detail-core-params__tag">{{ detail.theme }}</span>
+              <span class="detail-core-params__tag">库存 {{ detail?.stock ?? 0 }}</span>
+              <span class="detail-core-params__tag">销量 {{ detail?.sales ?? 0 }}</span>
+            </div>
+
+            <div class="detail-action-bar detail-action-bar--inline">
+              <button class="detail-secondary-button" type="button" @click="handleAddCart">加入购物车</button>
+              <button class="detail-primary-button" type="button" @click="handleSeckillBuy">
+                {{ isSeckill ? '立即抢购' : '立即购买' }}
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
       <section class="detail-content-card">
-        <div class="detail-content-card__media">
-          <div class="detail-badge" v-if="isSeckill">
-            秒杀
-            <small>{{ countdownText }}</small>
-          </div>
-          <div class="detail-main-visual" @mouseenter="stopGalleryLoop" @mouseleave="startGalleryLoop">
-            <button class="detail-main-visual__arrow is-prev" type="button" @click="prevImage" aria-label="上一张">
-              ‹
-            </button>
-            <img v-if="activeImage" class="detail-main-visual__image" :src="activeImage" :alt="detailTitle" />
-            <button class="detail-main-visual__arrow is-next" type="button" @click="nextImage" aria-label="下一张">
-              ›
-            </button>
-          </div>
-        </div>
-
         <div class="detail-content-card__text">
           <h3>图文介绍</h3>
-          <p>
-            {{ detailTitle }} 使用统一商品详情页展示逻辑承接，当前会根据接口自动判断是否显示秒杀模块。电脑端采用图文分栏，
-            手机端会收拢成单列布局，并保留清晰的价格信息、倒计时和底部操作区。
-          </p>
-          <hr />
-          <p>
-            当前商品库存为 {{ detail?.stock ?? 0 }} 件；若参与活动，则同步展示秒杀库存
-            {{ matchedSeckillGoods?.remainStock ?? detail?.stock ?? 0 }} 件。后续只要后端补充更完整的商品图片和介绍，这个页面就可以直接复用。
-          </p>
+          <div class="detail-richtext">
+            <p v-for="(paragraph, index) in detailParagraphs" :key="index">{{ paragraph }}</p>
+          </div>
           <div v-if="actionMessage" class="status-tip status-tip--info detail-action-tip">
             {{ actionMessage }}
           </div>
         </div>
       </section>
 
+      <section class="detail-comments-card">
+        <div class="detail-comments-card__head">
+          <div>
+            <p class="category-heading__eyebrow">Comments</p>
+            <h3>评论区</h3>
+          </div>
+          <span class="detail-comments-card__badge">预留扩展</span>
+        </div>
+        <div class="detail-comment-list">
+          <article class="detail-comment-item">
+            <div class="detail-comment-item__head">
+              <strong>匿名用户</strong>
+              <span>★★★★★</span>
+            </div>
+            <p>包装完整，发货速度快，页面这里先作为评论展示占位，后续可直接接真实评论数据。</p>
+          </article>
+          <article class="detail-comment-item">
+            <div class="detail-comment-item__head">
+              <strong>数码用户</strong>
+              <span>★★★★★</span>
+            </div>
+            <p>支持继续扩展评分、图文评论、追评和商家回复，目前先保留统一布局与视觉位置。</p>
+          </article>
+        </div>
+        <div class="detail-comments-card__placeholder">
+          <strong>评论功能后续接入</strong>
+          <p>如果后续没有评论数据，这里可以继续作为空状态占位，避免页面底部突然留白。</p>
+        </div>
+      </section>
       <section class="detail-action-bar">
         <button class="detail-secondary-button" type="button" @click="handleAddCart">加入购物车</button>
         <button class="detail-primary-button" type="button" @click="handleSeckillBuy">
@@ -368,3 +411,4 @@ onBeforeUnmount(() => {
     </section>
   </main>
 </template>
+

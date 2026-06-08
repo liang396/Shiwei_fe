@@ -116,8 +116,11 @@ function renderPrice(price) {
 function mapPromotionHeroProduct(item) {
   return {
     id: item.productId,
+    productId: item.productId,
     name: item.productName,
     desc: item.description,
+    productImage: item.productImage || '',
+    productImages: Array.isArray(item.productImages) ? item.productImages : [],
     price: Number(item.promotionPrice ?? 0),
     unit: '/件',
     theme: item.theme || 'electronics-phone',
@@ -133,8 +136,11 @@ function mapPromotionHeroProduct(item) {
 function mapRemoteProduct(item) {
   return {
     id: item.productId,
+    productId: item.productId,
     name: item.productName,
     desc: item.description,
+    productImage: item.productImage || '',
+    productImages: Array.isArray(item.productImages) ? item.productImages : [],
     price: Number(item.price ?? 0),
     unit: '/件',
     theme: item.theme || 'electronics-phone',
